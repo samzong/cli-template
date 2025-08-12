@@ -1,3 +1,7 @@
+# Enhanced Release Workflow
+# Merges cli-template with gofs advanced CI/CD features
+# Supports Docker, multi-platform builds, and comprehensive testing
+
 name: Release
 
 on:
@@ -9,8 +13,59 @@ permissions:
   contents: write
   packages: write
 
+env:
+  REGISTRY: ghcr.io
+  IMAGE_NAME: ${{ github.repository }}
+
 jobs:
+  # Pre-release validation
+  validate:
+    runs-on: ubuntu-latest
+    outputs:
+      version: ${{ steps.version.outputs.version }}
+      is-prerelease: ${{ steps.version.outputs.is-prerelease }}
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: '>=1.21.0'
+          cache: true
+
+      - name: Extract version info
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+          if [[ $VERSION =~ -[a-zA-Z] ]]; then
+            echo "is-prerelease=true" >> $GITHUB_OUTPUT
+          else
+            echo "is-prerelease=false" >> $GITHUB_OUTPUT
+          fi
+
+      - name: Validate version format
+        run: |
+          if [[ ! "${{ steps.version.outputs.version }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
+            echo "❌ Invalid version format: ${{ steps.version.outputs.version }}"
+            echo "Expected format: v1.2.3 or v1.2.3-alpha.1"
+            exit 1
+          fi
+
+      - name: Run quality checks
+        run: |
+          # Install dependencies
+          make install-deps
+          
+          # Run comprehensive checks
+          make check
+
+  # Main release job
   goreleaser:
+    needs: validate
     runs-on: ubuntu-latest
     steps:
       - name: Checkout
@@ -19,10 +74,20 @@ jobs:
           fetch-depth: 0
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: '>=1.21.0'
           cache: true
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Login to GitHub Container Registry
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
 
       - name: Run GoReleaser
         uses: goreleaser/goreleaser-action@v5
@@ -32,11 +97,86 @@ jobs:
           args: release --clean
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          HOMEBREW_TAP_GITHUB_TOKEN: ${{ secrets.GH_PAT }}
 
+      - name: Upload release assets checksums
+        uses: actions/upload-artifact@v4
+        with:
+          name: checksums
+          path: dist/checksums.txt
+          retention-days: 90
+
+  # Trigger Homebrew update
+  homebrew:
+    needs: [validate, goreleaser]
+    runs-on: ubuntu-latest
+    if: success() && needs.validate.outputs.is-prerelease == 'false'
+    steps:
       - name: Trigger Homebrew Update
-        if: success()
-        uses: peter-evans/repository-dispatch@v2
+        uses: peter-evans/repository-dispatch@v3
         with:
           token: ${{ secrets.GH_PAT }}
           event-type: trigger-homebrew-update
-          client-payload: '{"version": "${{ github.ref_name }}"}' 
+          client-payload: |
+            {
+              "version": "${{ needs.validate.outputs.version }}",
+              "is_prerelease": "${{ needs.validate.outputs.is-prerelease }}"
+            }
+
+  # Security scanning
+  security:
+    needs: goreleaser
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          scan-type: 'fs'
+          scan-ref: '.'
+          format: 'sarif'
+          output: 'trivy-results.sarif'
+
+      - name: Upload Trivy scan results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        if: always()
+        with:
+          sarif_file: 'trivy-results.sarif'
+
+  # Post-release validation
+  post-release:
+    needs: [validate, goreleaser]
+    runs-on: ubuntu-latest
+    if: success()
+    steps:
+      - name: Validate release artifacts
+        run: |
+          # Download and verify checksums
+          VERSION="${{ needs.validate.outputs.version }}"
+          REPO="${{ github.repository }}"
+          
+          echo "🔍 Validating release artifacts for $VERSION..."
+          
+          # Check if release exists
+          if ! curl -s "https://api.github.com/repos/$REPO/releases/tags/$VERSION" | grep -q "tag_name"; then
+            echo "❌ Release $VERSION not found"
+            exit 1
+          fi
+          
+          # Verify checksums file exists
+          if ! curl -s -f -L "https://github.com/$REPO/releases/download/$VERSION/checksums.txt" > /dev/null; then
+            echo "❌ Checksums file not found"
+            exit 1
+          fi
+          
+          echo "✅ Release validation passed"
+
+      - name: Notify success
+        if: success()
+        run: |
+          echo "🎉 Release ${{ needs.validate.outputs.version }} completed successfully!"
+          echo "📦 Assets: https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.version }}"
+          echo "📋 Changelog: https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.version }}"
