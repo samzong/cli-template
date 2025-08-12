@@ -32,18 +32,15 @@ EOF
 
 parse_args() {
     [ $# -lt 2 ] && { show_usage; exit 1; }
-    
     NEW_MODULE_PATH="$1"
     CLI_NAME="$2"
     shift 2
-    
     GITHUB_USER=""
     ENABLE_DOCKER=false
     HOMEBREW_TAP="homebrew-tap"
     DESCRIPTION="A CLI application built with Go"
     HOMEPAGE=""
     DRY_RUN=false
-    
     while [[ $# -gt 0 ]]; do
         case $1 in
             --github-user) GITHUB_USER="$2"; shift 2 ;;
@@ -56,7 +53,6 @@ parse_args() {
             *) die "Unknown option: $1" ;;
         esac
     done
-    
     [ -z "$GITHUB_USER" ] && GITHUB_USER=$(echo "$NEW_MODULE_PATH" | cut -d'/' -f2)
     [ -z "$HOMEPAGE" ] && HOMEPAGE="https://github.com/$GITHUB_USER/$CLI_NAME"
 }
@@ -77,7 +73,6 @@ validate_inputs() {
 
 backup_files() {
     [ "$DRY_RUN" = true ] && { echo "Would create backup"; return; }
-    
     local backup_dir=".customize-backup-$(date +%Y%m%d-%H%M%S)"
     mkdir -p "$backup_dir"
     cp go.mod Makefile "$backup_dir/"
@@ -90,7 +85,6 @@ apply_sed() {
     local file="$1"
     local pattern="$2"
     local replacement="$3"
-    
     [ "$DRY_RUN" = true ] && { echo "Would update $file: $pattern -> $replacement"; return; }
     sed -i '' "s|$pattern|$replacement|g" "$file"
 }
@@ -99,7 +93,6 @@ bulk_replace() {
     local pattern="$1"
     local replacement="$2"
     shift 2
-    
     for file in "$@"; do
         [ -f "$file" ] && apply_sed "$file" "$pattern" "$replacement"
     done
@@ -110,12 +103,10 @@ find_and_replace() {
     local replacement="$2"
     local file_pattern="$3"
     local exclude_path="$4"
-    
     if [ "$DRY_RUN" = true ]; then
         echo "Would update all $file_pattern files: $pattern -> $replacement"
         return
     fi
-    
     find . -type f -name "$file_pattern" -not -path "$exclude_path" \
         -exec sed -i '' "s|$pattern|$replacement|g" {} \;
 }
@@ -131,16 +122,13 @@ update_makefile() {
     bulk_replace "github.com/samzong/$ORIGINAL_CLI_NAME" "github.com/$GITHUB_USER/$CLI_NAME" Makefile
     bulk_replace "samzong/$ORIGINAL_CLI_NAME" "$GITHUB_USER/$CLI_NAME" Makefile
     bulk_replace "$ORIGINAL_MODULE_PATH" "$NEW_MODULE_PATH" Makefile
-    
     [ "$HOMEBREW_TAP" != "homebrew-tap" ] && 
         apply_sed "Makefile" "HOMEBREW_TAP_REPO=homebrew-tap" "HOMEBREW_TAP_REPO=$HOMEBREW_TAP"
 }
 
 update_goreleaser() {
     local file=".goreleaser.yaml"
-    
     [ -f ".goreleaser.yaml.enhanced" ] && cp ".goreleaser.yaml.enhanced" "$file"
-    
     bulk_replace "project_name: mycli" "project_name: $CLI_NAME" "$file"
     bulk_replace "id: mycli" "id: $CLI_NAME" "$file"
     bulk_replace "binary: mycli" "binary: $CLI_NAME" "$file"
@@ -152,7 +140,6 @@ update_goreleaser() {
     bulk_replace "name: homebrew-tap" "name: $HOMEBREW_TAP" "$file"
     bulk_replace "description: \"A CLI application built with Go\"" "description: \"$DESCRIPTION\"" "$file"
     bulk_replace "homepage: \"https://github.com/samzong/mycli\"" "homepage: \"$HOMEPAGE\"" "$file"
-    
     if [ "$ENABLE_DOCKER" = false ]; then
         [ "$DRY_RUN" = false ] && 
             sed -i '' '/^# Enhanced Docker support/,/^# Enhanced release configuration/s/^/# /' "$file"
@@ -164,7 +151,6 @@ update_goreleaser() {
 create_dockerfile() {
     [ "$DRY_RUN" = true ] && { echo "Would create Dockerfile.goreleaser"; return; }
     [ -f "Dockerfile.goreleaser" ] && return
-    
     cat > Dockerfile.goreleaser << 'EOF'
 FROM alpine:latest
 RUN apk --no-cache add ca-certificates
@@ -176,7 +162,6 @@ USER appuser
 EXPOSE 8080
 ENTRYPOINT ["/app/mycli"]
 EOF
-    
     apply_sed "Dockerfile.goreleaser" "mycli" "$CLI_NAME"
 }
 

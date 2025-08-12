@@ -1,7 +1,3 @@
-# Enhanced CI Workflow
-# Comprehensive testing and quality checks for pull requests
-# Includes code quality, security scanning, and cross-platform testing
-
 name: CI
 
 on:
@@ -19,7 +15,6 @@ env:
   GO_VERSION: ">=1.21.0"
 
 jobs:
-  # Code quality and formatting
   quality:
     runs-on: ubuntu-latest
     steps:
@@ -39,7 +34,7 @@ jobs:
         run: |
           make fmt
           if ! git diff --quiet; then
-            echo "❌ Code is not properly formatted"
+            echo "Code is not properly formatted"
             echo "Run 'make fmt' to fix formatting issues"
             git diff
             exit 1
@@ -52,13 +47,12 @@ jobs:
         run: |
           go mod tidy
           if ! git diff --quiet go.mod go.sum; then
-            echo "❌ go.mod/go.sum is not tidy"
+            echo "go.mod/go.sum is not tidy"
             echo "Run 'go mod tidy' to fix"
             git diff go.mod go.sum
             exit 1
           fi
 
-  # Cross-platform testing
   test:
     strategy:
       matrix:
@@ -81,7 +75,6 @@ jobs:
       - name: Run benchmarks
         run: go test -v -bench=. -benchmem ./...
 
-  # Test coverage
   coverage:
     runs-on: ubuntu-latest
     steps:
@@ -114,7 +107,6 @@ jobs:
             coverage.out
             coverage.html
 
-  # Security scanning
   security:
     runs-on: ubuntu-latest
     steps:
@@ -143,7 +135,6 @@ jobs:
           go install golang.org/x/vuln/cmd/govulncheck@latest
           govulncheck ./...
 
-  # Dependency check
   dependency-check:
     runs-on: ubuntu-latest
     steps:
@@ -163,13 +154,11 @@ jobs:
 
       - name: Analyze dependencies
         run: |
-          echo "🔍 Analyzing Go dependencies..."
+          echo "Analyzing Go dependencies..."
           go list -m -json all | jq -r '.Path' | sort | uniq | wc -l | xargs echo "Total dependencies:"
-
-          echo "📋 Direct dependencies:"
+          echo "Direct dependencies:"
           go list -m -json all | jq -r 'select(.Main != true and .Indirect != true) | .Path'
 
-  # Build verification
   build:
     strategy:
       matrix:
@@ -197,11 +186,10 @@ jobs:
             ./bin/mycli --version
           fi
 
-      - name: Cross-compile check (Linux only)
+      - name: Cross-compile check
         if: matrix.os == 'ubuntu-latest'
         run: make build-all
 
-  # Documentation check
   docs:
     runs-on: ubuntu-latest
     steps:
@@ -210,26 +198,19 @@ jobs:
 
       - name: Check documentation
         run: |
-          echo "📚 Checking documentation..."
-
-          # Check if README exists and has content
+          echo "Checking documentation..."
           if [ ! -f README.md ] || [ ! -s README.md ]; then
-            echo "❌ README.md is missing or empty"
+            echo "README.md is missing or empty"
             exit 1
           fi
-
-          # Check for basic sections
           if ! grep -q "## Installation" README.md; then
-            echo "⚠️ README.md should include Installation section"
+            echo "README.md should include Installation section"
           fi
-
           if ! grep -q "## Usage" README.md; then
-            echo "⚠️ README.md should include Usage section"
+            echo "README.md should include Usage section"
           fi
+          echo "Documentation check passed"
 
-          echo "✅ Documentation check passed"
-
-  # Integration test
   integration:
     runs-on: ubuntu-latest
     needs: [quality, test, build]
@@ -248,21 +229,14 @@ jobs:
 
       - name: Run integration tests
         run: |
-          echo "🧪 Running integration tests..."
-
-          # Test basic functionality
+          echo "Running integration tests..."
           ./bin/mycli --help
           ./bin/mycli --version
-
-          # Test configuration commands if they exist
           if ./bin/mycli config --help > /dev/null 2>&1; then
-            echo "✅ Config command available"
-            # Additional config tests can be added here
+            echo "Config command available"
           fi
+          echo "Integration tests passed"
 
-          echo "✅ Integration tests passed"
-
-  # Summary job
   ci-summary:
     runs-on: ubuntu-latest
     needs:
@@ -280,7 +254,7 @@ jobs:
     steps:
       - name: Check job results
         run: |
-          echo "🔍 CI Summary:"
+          echo "CI Summary:"
           echo "Quality: ${{ needs.quality.result }}"
           echo "Test: ${{ needs.test.result }}"
           echo "Coverage: ${{ needs.coverage.result }}"
@@ -289,13 +263,10 @@ jobs:
           echo "Build: ${{ needs.build.result }}"
           echo "Docs: ${{ needs.docs.result }}"
           echo "Integration: ${{ needs.integration.result }}"
-
-          # Fail if any required job failed
           if [[ "${{ needs.quality.result }}" != "success" ]] || \
              [[ "${{ needs.test.result }}" != "success" ]] || \
              [[ "${{ needs.build.result }}" != "success" ]]; then
-            echo "❌ CI failed - required jobs did not pass"
+            echo "CI failed - required jobs did not pass"
             exit 1
           fi
-
-          echo "✅ All CI checks passed!"
+          echo "All CI checks passed!"

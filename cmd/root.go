@@ -9,16 +9,12 @@ import (
 )
 
 var (
-	CLI_NAME = "mycli"
-
+	CLI_NAME  = "mycli"
 	Version   = "dev"
 	BuildTime = "unknown"
-
-	cfgFile string
-
-	verbose bool
-
-	cfg *config.Config
+	cfgFile   string
+	verbose   bool
+	cfg       *config.Config
 
 	rootCmd = &cobra.Command{
 		Use:   CLI_NAME,
@@ -54,9 +50,5 @@ func Execute() error {
 func init() {
 	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", fmt.Sprintf("config file (default is $HOME/.%s.yaml)", CLI_NAME))
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
-
 	rootCmd.AddCommand(versionCmd)
-}
-
-func initConfig() {
 }

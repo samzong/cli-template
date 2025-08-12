@@ -1,7 +1,3 @@
-# Enhanced Release Workflow
-# Merges cli-template with gofs advanced CI/CD features
-# Supports Docker, multi-platform builds, and comprehensive testing
-
 name: Release
 
 on:
@@ -18,7 +14,6 @@ env:
   IMAGE_NAME: ${{ github.repository }}
 
 jobs:
-  # Pre-release validation
   validate:
     runs-on: ubuntu-latest
     outputs:
@@ -50,20 +45,16 @@ jobs:
       - name: Validate version format
         run: |
           if [[ ! "${{ steps.version.outputs.version }}" =~ ^v[0-9]+\.[0-9]+\.[0-9]+(-[a-zA-Z0-9.-]+)?$ ]]; then
-            echo "❌ Invalid version format: ${{ steps.version.outputs.version }}"
+            echo "Invalid version format: ${{ steps.version.outputs.version }}"
             echo "Expected format: v1.2.3 or v1.2.3-alpha.1"
             exit 1
           fi
 
       - name: Run quality checks
         run: |
-          # Install dependencies
           make install-deps
-          
-          # Run comprehensive checks
           make check
 
-  # Main release job
   goreleaser:
     needs: validate
     runs-on: ubuntu-latest
@@ -106,7 +97,6 @@ jobs:
           path: dist/checksums.txt
           retention-days: 90
 
-  # Trigger Homebrew update
   homebrew:
     needs: [validate, goreleaser]
     runs-on: ubuntu-latest
@@ -123,7 +113,6 @@ jobs:
               "is_prerelease": "${{ needs.validate.outputs.is-prerelease }}"
             }
 
-  # Security scanning
   security:
     needs: goreleaser
     runs-on: ubuntu-latest
@@ -146,7 +135,6 @@ jobs:
         with:
           sarif_file: 'trivy-results.sarif'
 
-  # Post-release validation
   post-release:
     needs: [validate, goreleaser]
     runs-on: ubuntu-latest
@@ -154,29 +142,22 @@ jobs:
     steps:
       - name: Validate release artifacts
         run: |
-          # Download and verify checksums
           VERSION="${{ needs.validate.outputs.version }}"
           REPO="${{ github.repository }}"
-          
-          echo "🔍 Validating release artifacts for $VERSION..."
-          
-          # Check if release exists
+          echo "Validating release artifacts for $VERSION..."
           if ! curl -s "https://api.github.com/repos/$REPO/releases/tags/$VERSION" | grep -q "tag_name"; then
-            echo "❌ Release $VERSION not found"
+            echo "Release $VERSION not found"
             exit 1
           fi
-          
-          # Verify checksums file exists
           if ! curl -s -f -L "https://github.com/$REPO/releases/download/$VERSION/checksums.txt" > /dev/null; then
-            echo "❌ Checksums file not found"
+            echo "Checksums file not found"
             exit 1
           fi
-          
-          echo "✅ Release validation passed"
+          echo "Release validation passed"
 
       - name: Notify success
         if: success()
         run: |
-          echo "🎉 Release ${{ needs.validate.outputs.version }} completed successfully!"
-          echo "📦 Assets: https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.version }}"
-          echo "📋 Changelog: https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.version }}"
+          echo "Release ${{ needs.validate.outputs.version }} completed successfully!"
+          echo "Assets: https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.version }}"
+          echo "Changelog: https://github.com/${{ github.repository }}/releases/tag/${{ needs.validate.outputs.version }}"

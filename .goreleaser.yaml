@@ -1,28 +1,15 @@
-# Enhanced GoReleaser Configuration Template
-# Merges cli-template simplicity with gofs advanced features
-# Compatible with CLI template structure and customization workflow
-
 version: 2
-
-# TEMPLATE_PLACEHOLDER: Will be replaced by customize.sh
 project_name: mycli
 
 before:
   hooks:
-    # Clean up dependencies before build
     - go mod tidy
-    # OPTIONAL: Add additional pre-build hooks
-    # - make clean
-    # - go generate ./...
 
 builds:
   - id: mycli
-    # TEMPLATE_PLACEHOLDER: Main package path (compatible with cli-template structure)
     main: ./main.go
-    # TEMPLATE_PLACEHOLDER: Binary name (will be replaced by customize.sh)
     binary: mycli
     env:
-      # Disable CGO for static linking
       - CGO_ENABLED=0
     goos:
       - linux
@@ -31,19 +18,13 @@ builds:
     goarch:
       - amd64
       - arm64
-    # Exclude arm64 Windows (not supported by Go)
     ignore:
       - goos: windows
         goarch: arm64
     ldflags:
-      # Strip debug info and reduce binary size
       - -s -w
-      # TEMPLATE_PLACEHOLDER: Compatible with cli-template variable structure
       - -X github.com/samzong/cli-template/cmd.Version={{.Version}}
       - -X github.com/samzong/cli-template/cmd.BuildTime={{.Date}}
-      # OPTIONAL: Add more build-time variables
-      # - -X github.com/samzong/cli-template/cmd.Commit={{.Commit}}
-      # - -X github.com/samzong/cli-template/cmd.BuiltBy=goreleaser
 
 archives:
   - id: default
@@ -58,14 +39,9 @@ archives:
       - goos: windows
         format: zip
     files:
-      # Include essential files
       - README.md
       - LICENSE
-      # OPTIONAL: Include additional files
-      # - CHANGELOG.md
-      # - docs/**/*
 
-# Enhanced Docker support (OPTIONAL - can be disabled)
 dockers:
   - image_templates:
       - "ghcr.io/samzong/{{ .ProjectName }}:{{ .Version }}-amd64"
@@ -110,7 +86,6 @@ docker_manifests:
       - "ghcr.io/samzong/{{ .ProjectName }}:latest-amd64"
       - "ghcr.io/samzong/{{ .ProjectName }}:latest-arm64"
 
-# Enhanced Homebrew integration with conflict prevention
 brews:
   - name: mycli
     # TEMPLATE_PLACEHOLDER: Tap repository (will be replaced by customize.sh)
@@ -119,25 +94,14 @@ brews:
       name: homebrew-tap
       branch: main
       token: "{{ .Env.HOMEBREW_TAP_GITHUB_TOKEN }}"
-      # Create PR instead of direct push to prevent conflicts
       pull_request:
         enabled: true
-    # TEMPLATE_PLACEHOLDER: Will be replaced with project-specific path
     directory: Formula
     homepage: "https://github.com/samzong/mycli"
     description: "A CLI application built with Go"
     license: "MIT"
-    # OPTIONAL: Add dependencies if needed
-    # dependencies:
-    #   - name: git
-    # test: |
-    #   system "#{bin}/mycli --version"
-    # OPTIONAL: Add custom install instructions
-    # install: |
-    #   bin.install "mycli"
 
 changelog:
-  # Enhanced changelog configuration
   use: github
   sort: asc
   abbrev: 0
@@ -171,7 +135,6 @@ checksum:
 snapshot:
   name_template: "{{ incpatch .Version }}-next"
 
-# Enhanced release configuration
 release:
   # Create release notes from changelog
   header: |
@@ -197,27 +160,12 @@ release:
 
     **Full Changelog**: https://github.com/samzong/{{ .ProjectName }}/compare/{{ .PreviousTag }}...{{ .Tag }}
 
-  # OPTIONAL: Disable release if needed during development
-  # disable: true
 
-# GitHub configuration
 github_urls:
   api: https://api.github.com/
   upload: https://uploads.github.com/
   download: https://github.com/
 
-# Build metadata
 metadata:
   mod_timestamp: "{{ .CommitTimestamp }}"
 
-# OPTIONAL: Sign releases (requires setup)
-# signs:
-#   - artifacts: checksum
-#     args:
-#       - "--batch"
-#       - "--local-user"
-#       - "{{ .Env.GPG_FINGERPRINT }}" # set this environment variable for your signing key
-#       - "--output"
-#       - "${signature}"
-#       - "--detach-sign"
-#       - "${artifact}"
