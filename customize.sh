@@ -10,6 +10,8 @@ die() { echo "Error: $1" >&2; exit 1; }
 show_usage() {
     cat << 'EOF'
 Usage: ./customize.sh <MODULE_PATH> <CLI_NAME> [OPTIONS]
+       ./customize.sh --rollback [BACKUP_DIR]
+       ./customize.sh --list-backups
 
 Arguments:
   MODULE_PATH    New Go module path (e.g., github.com/user/project)
@@ -22,15 +24,37 @@ Options:
   --description DESC     Project description
   --homepage URL         Project homepage URL
   --dry-run             Show changes without applying
+  --rollback [DIR]      Rollback to backup (latest if DIR not specified)
+  --list-backups        List available backups
   --help                Show this help
 
 Examples:
   ./customize.sh github.com/user/project myapp
   ./customize.sh github.com/user/project myapp --enable-docker
+  ./customize.sh --rollback
+  ./customize.sh --rollback .customize-backup-20240812-141500
+  ./customize.sh --list-backups
 EOF
 }
 
 parse_args() {
+    # Handle rollback and list-backups modes
+    case "${1:-}" in
+        --rollback)
+            ROLLBACK_MODE=true
+            BACKUP_DIR="${2:-}"
+            return
+            ;;
+        --list-backups)
+            list_backups
+            exit 0
+            ;;
+        --help)
+            show_usage
+            exit 0
+            ;;
+    esac
+    
     [ $# -lt 2 ] && { show_usage; exit 1; }
     NEW_MODULE_PATH="$1"
     CLI_NAME="$2"
@@ -41,6 +65,7 @@ parse_args() {
     DESCRIPTION="A CLI application built with Go"
     HOMEPAGE=""
     DRY_RUN=false
+    ROLLBACK_MODE=false
     while [[ $# -gt 0 ]]; do
         case $1 in
             --github-user) GITHUB_USER="$2"; shift 2 ;;
@@ -78,7 +103,89 @@ backup_files() {
     cp go.mod Makefile "$backup_dir/"
     cp .goreleaser.yaml "$backup_dir/" 2>/dev/null || true
     cp -r cmd "$backup_dir/" 2>/dev/null || true
+    [ -d ".github" ] && cp -r .github "$backup_dir/" 2>/dev/null || true
+    [ -f ".gitignore" ] && cp .gitignore "$backup_dir/" 2>/dev/null || true
+    [ -f "Dockerfile.goreleaser" ] && cp Dockerfile.goreleaser "$backup_dir/" 2>/dev/null || true
     echo "Backup created: $backup_dir"
+}
+
+list_backups() {
+    echo "Available backups:"
+    local backups=($(ls -d .customize-backup-* 2>/dev/null | sort -r))
+    if [ ${#backups[@]} -eq 0 ]; then
+        echo "  No backups found"
+        return
+    fi
+    
+    for backup in "${backups[@]}"; do
+        local timestamp=$(echo "$backup" | grep -o '[0-9]\{8\}-[0-9]\{6\}')
+        local date_formatted=$(date -j -f "%Y%m%d-%H%M%S" "$timestamp" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$timestamp")
+        echo "  $backup (created: $date_formatted)"
+    done
+}
+
+find_latest_backup() {
+    local latest=$(ls -d .customize-backup-* 2>/dev/null | sort -r | head -n1)
+    echo "$latest"
+}
+
+validate_backup() {
+    local backup_dir="$1"
+    [ -z "$backup_dir" ] && die "Backup directory not specified"
+    [ ! -d "$backup_dir" ] && die "Backup directory not found: $backup_dir"
+    [ ! -f "$backup_dir/go.mod" ] && die "Invalid backup: missing go.mod"
+    [ ! -f "$backup_dir/Makefile" ] && die "Invalid backup: missing Makefile"
+    [ ! -d "$backup_dir/cmd" ] && die "Invalid backup: missing cmd directory"
+}
+
+rollback_files() {
+    local backup_dir="$1"
+    
+    echo "Rolling back from backup: $backup_dir"
+    
+    # Restore main files
+    cp "$backup_dir/go.mod" .
+    cp "$backup_dir/Makefile" .
+    [ -f "$backup_dir/.goreleaser.yaml" ] && cp "$backup_dir/.goreleaser.yaml" .
+    [ -f "$backup_dir/.gitignore" ] && cp "$backup_dir/.gitignore" .
+    [ -f "$backup_dir/Dockerfile.goreleaser" ] && cp "$backup_dir/Dockerfile.goreleaser" .
+    
+    # Restore directories
+    rm -rf cmd
+    cp -r "$backup_dir/cmd" .
+    
+    if [ -d "$backup_dir/.github" ]; then
+        rm -rf .github
+        cp -r "$backup_dir/.github" .
+    fi
+    
+    # Clean up Go modules
+    go mod tidy
+    
+    echo "✓ Rollback completed successfully"
+    echo
+    echo "Files restored from backup created at:"
+    local timestamp=$(echo "$backup_dir" | grep -o '[0-9]\{8\}-[0-9]\{6\}')
+    date -j -f "%Y%m%d-%H%M%S" "$timestamp" "+%Y-%m-%d %H:%M:%S" 2>/dev/null || echo "$timestamp"
+}
+
+perform_rollback() {
+    local backup_dir="$BACKUP_DIR"
+    
+    if [ -z "$backup_dir" ]; then
+        backup_dir=$(find_latest_backup)
+        [ -z "$backup_dir" ] && die "No backups found. Use --list-backups to see available backups."
+        echo "Using latest backup: $backup_dir"
+    fi
+    
+    validate_backup "$backup_dir"
+    
+    echo "This will restore files from backup and overwrite current changes."
+    read -p "Are you sure you want to rollback? [y/N]: " -n 1 -r
+    echo
+    [[ ! $REPLY =~ ^[Yy]$ ]] && { echo "Rollback cancelled"; exit 0; }
+    
+    rollback_files "$backup_dir"
 }
 
 apply_sed() {
@@ -114,7 +221,7 @@ find_and_replace() {
 update_go_files() {
     apply_sed "go.mod" "module $ORIGINAL_MODULE_PATH" "module $NEW_MODULE_PATH"
     find_and_replace "$ORIGINAL_MODULE_PATH" "$NEW_MODULE_PATH" "*.go" "./.customize-backup-*"
-    apply_sed "cmd/root.go" "CLI_NAME = \"$ORIGINAL_CLI_NAME\"" "CLI_NAME = \"$CLI_NAME\""
+    apply_sed "cmd/root.go" "CLI_NAME  = \"$ORIGINAL_CLI_NAME\"" "CLI_NAME  = \"$CLI_NAME\""
 }
 
 update_makefile() {
@@ -204,6 +311,13 @@ EOF
 
 main() {
     parse_args "$@"
+    
+    # Handle rollback mode
+    if [ "$ROLLBACK_MODE" = true ]; then
+        perform_rollback
+        exit 0
+    fi
+    
     validate_inputs
     show_summary
     

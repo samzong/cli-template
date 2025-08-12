@@ -101,6 +101,10 @@ brews:
     description: "A CLI application built with Go"
     license: "MIT"
 
+dockerhub:
+  - username: samzong
+    secret_name: DOCKERHUB_TOKEN
+
 changelog:
   use: github
   sort: asc
