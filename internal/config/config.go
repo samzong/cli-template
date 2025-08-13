@@ -74,7 +74,6 @@ func LoadConfig(cfgFile string, cliName string) (*Config, error) {
 }
 
 func SaveConfig(config *Config) error {
-
 	viper.Set("example", config.Example)
 
 	return viper.WriteConfig()

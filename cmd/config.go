@@ -48,13 +48,13 @@ var configInitCmd = &cobra.Command{
 			return
 		}
 
-		configDir := filepath.Join(homeDir, ".config", CLI_NAME)
+		configDir := filepath.Join(homeDir, ".config", NAME)
 		if err := os.MkdirAll(configDir, 0755); err != nil {
 			fmt.Fprintf(os.Stderr, "Error: Failed to create config directory: %v\n", err)
 			return
 		}
 
-		configFile := filepath.Join(configDir, fmt.Sprintf(".%s.yaml", CLI_NAME))
+		configFile := filepath.Join(configDir, fmt.Sprintf(".%s.yaml", NAME))
 
 		if _, err := os.Stat(configFile); err == nil {
 			fmt.Printf("Configuration file already exists at: %s\n", configFile)

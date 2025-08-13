@@ -9,7 +9,7 @@ import (
 )
 
 var (
-	CLI_NAME  = "mycli"
+	NAME      = "mycli"
 	Version   = "dev"
 	BuildTime = "unknown"
 	cfgFile   string
@@ -17,10 +17,9 @@ var (
 	cfg       *config.Config
 
 	rootCmd = &cobra.Command{
-		Use:   CLI_NAME,
-		Short: fmt.Sprintf("%s is a CLI tool", CLI_NAME),
-		Long: fmt.Sprintf(`%s is a powerful CLI tool that helps you manage resources.
-This is a template and should be customized for your specific use case.`, CLI_NAME),
+		Use:     NAME,
+		Short:   fmt.Sprintf("%s is a CLI tool", NAME),
+		Long:    fmt.Sprintf(`%s is a powerful CLI tool that helps you manage resources.`, NAME),
 		Version: fmt.Sprintf("%s (built at %s)", Version, BuildTime),
 		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
 			if cmd.Name() == "version" || cmd.Name() == "help" || cmd.Name() == "completion" {
@@ -28,7 +27,7 @@ This is a template and should be customized for your specific use case.`, CLI_NA
 			}
 
 			var err error
-			cfg, err = config.LoadConfig(cfgFile, CLI_NAME)
+			cfg, err = config.LoadConfig(cfgFile, NAME)
 			if err != nil {
 				fmt.Fprintf(os.Stderr, "Warning: Failed to load config: %s\n", err)
 				cfg = &config.DefaultConfig
@@ -48,7 +47,11 @@ func Execute() error {
 }
 
 func init() {
-	rootCmd.PersistentFlags().StringVar(&cfgFile, "config", "", fmt.Sprintf("config file (default is $HOME/.%s.yaml)", CLI_NAME))
+	rootCmd.PersistentFlags().StringVar(
+		&cfgFile,
+		"config",
+		"",
+		fmt.Sprintf("config file (default is $HOME/.%s.yaml)", NAME))
 	rootCmd.PersistentFlags().BoolVarP(&verbose, "verbose", "v", false, "enable verbose output")
 	rootCmd.AddCommand(versionCmd)
 }
