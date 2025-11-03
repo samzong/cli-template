@@ -1,0 +1,176 @@
+name: Setup Project
+
+on:
+  workflow_dispatch:
+    inputs:
+      module_path:
+        description: 'Go module path (optional, defaults to github.com/{owner}/{repo})'
+        required: false
+        type: string
+      cli_name:
+        description: 'CLI binary name (optional, defaults to repository name)'
+        required: false
+        type: string
+      github_user:
+        description: 'GitHub username/org (optional, defaults to repository owner)'
+        required: false
+        type: string
+      enable_docker:
+        description: 'Enable Docker support'
+        required: false
+        type: boolean
+        default: false
+      docker_registry_owner:
+        description: 'Docker registry owner for GHCR (optional)'
+        required: false
+        type: string
+      homebrew_tap:
+        description: 'Homebrew tap (e.g., homebrew/core or homebrew-tap)'
+        required: false
+        type: string
+      description:
+        description: 'Project description'
+        required: false
+        type: string
+        default: 'A CLI application built with Go'
+
+permissions:
+  contents: write
+  pull-requests: write
+
+jobs:
+  customize:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout repository
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Configure Git
+        run: |
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+      - name: Set default values from repository
+        id: defaults
+        run: |
+          # Extract repository owner and name
+          REPO_OWNER="${{ github.repository_owner }}"
+          REPO_NAME="${{ github.repository }}"
+          REPO_NAME="${REPO_NAME#*/}"  # Remove owner/ prefix
+          
+          # Set defaults if not provided
+          MODULE_PATH="${{ inputs.module_path }}"
+          CLI_NAME="${{ inputs.cli_name }}"
+          GITHUB_USER="${{ inputs.github_user }}"
+          
+          if [ -z "$MODULE_PATH" ]; then
+            MODULE_PATH="github.com/${REPO_OWNER}/${REPO_NAME}"
+          fi
+          
+          if [ -z "$CLI_NAME" ]; then
+            CLI_NAME="$REPO_NAME"
+          fi
+          
+          if [ -z "$GITHUB_USER" ]; then
+            GITHUB_USER="$REPO_OWNER"
+          fi
+          
+          echo "module_path=$MODULE_PATH" >> $GITHUB_OUTPUT
+          echo "cli_name=$CLI_NAME" >> $GITHUB_OUTPUT
+          echo "github_user=$GITHUB_USER" >> $GITHUB_OUTPUT
+          
+          echo "Using values:"
+          echo "  Module Path: $MODULE_PATH"
+          echo "  CLI Name: $CLI_NAME"
+          echo "  GitHub User: $GITHUB_USER"
+
+      - name: Create branch
+        run: |
+          BRANCH_NAME="setup/$(echo '${{ steps.defaults.outputs.cli_name }}' | tr '[:upper:]' '[:lower:]')-$(date +%s)"
+          git checkout -b "$BRANCH_NAME"
+          echo "BRANCH_NAME=$BRANCH_NAME" >> $GITHUB_ENV
+
+      - name: Make customize.sh executable
+        run: chmod +x customize.sh
+
+      - name: Run customization script
+        run: |
+          ARGS=(
+            "${{ steps.defaults.outputs.module_path }}"
+            "${{ steps.defaults.outputs.cli_name }}"
+            --yes
+          )
+          
+          # Only add --github-user if explicitly provided
+          [ -n "${{ inputs.github_user }}" ] && ARGS+=(--github-user "${{ steps.defaults.outputs.github_user }}")
+          [ "${{ inputs.enable_docker }}" == "true" ] && ARGS+=(--enable-docker)
+          [ -n "${{ inputs.docker_registry_owner }}" ] && ARGS+=(--docker-registry-owner "${{ inputs.docker_registry_owner }}")
+          [ -n "${{ inputs.homebrew_tap }}" ] && ARGS+=(--homebrew-tap "${{ inputs.homebrew_tap }}")
+          [ -n "${{ inputs.description }}" ] && ARGS+=(--description "${{ inputs.description }}")
+          
+          ./customize.sh "${ARGS[@]}"
+
+      - name: Check for changes
+        id: check-changes
+        run: |
+          if git diff --quiet && git diff --cached --quiet; then
+            echo "has_changes=false" >> $GITHUB_OUTPUT
+            echo "No changes detected"
+          else
+            echo "has_changes=true" >> $GITHUB_OUTPUT
+            echo "Changes detected"
+            git status --short
+          fi
+
+      - name: Commit changes
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          git add .
+          git commit -m "chore: customize template for ${{ steps.defaults.outputs.cli_name }}"
+
+      - name: Push changes
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          git push origin "$BRANCH_NAME"
+
+      - name: Create Pull Request
+        if: steps.check-changes.outputs.has_changes == 'true'
+        uses: peter-evans/create-pull-request@v5
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+          branch: ${{ env.BRANCH_NAME }}
+          title: "Setup project: ${{ steps.defaults.outputs.cli_name }}"
+          body: |
+            This PR customizes the CLI template for **${{ steps.defaults.outputs.cli_name }}**.
+            
+            **Configuration:**
+            - Module Path: `${{ steps.defaults.outputs.module_path }}`
+            - CLI Name: `${{ steps.defaults.outputs.cli_name }}`
+            - GitHub User: `${{ steps.defaults.outputs.github_user }}`
+            - Docker: ${{ inputs.enable_docker && 'Enabled' || 'Disabled' }}
+            ${{ inputs.homebrew_tap && format('- Homebrew Tap: `{0}`', inputs.homebrew_tap) || '' }}
+            
+            **Next steps:**
+            1. Review the changes
+            2. Merge this PR
+            3. Update your repository settings
+            4. Configure GitHub Secrets if needed
+            
+          labels: |
+            setup
+          draft: false
+
+      - name: Summary
+        if: steps.check-changes.outputs.has_changes == 'true'
+        run: |
+          echo "✓ Customization complete!"
+          echo "✓ Pull request created: ${{ env.BRANCH_NAME }}"
+
+      - name: No changes summary
+        if: steps.check-changes.outputs.has_changes == 'false'
+        run: |
+          echo "ℹ No changes detected. The template may already be customized."
+

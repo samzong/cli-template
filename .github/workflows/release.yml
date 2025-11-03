@@ -51,9 +51,7 @@ jobs:
           fi
 
       - name: Run quality checks
-        run: |
-          make install-deps
-          make check
+        run: make check
 
   goreleaser:
     needs: validate
