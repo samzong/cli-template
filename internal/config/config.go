@@ -32,7 +32,7 @@ func LoadConfig(cfgFile string, cliName string) (*Config, error) {
 
 		viper.AddConfigPath(configDir)
 		viper.AddConfigPath(homeDir)
-		viper.SetConfigName(fmt.Sprintf(".%s", cliName))
+		viper.SetConfigName("." + cliName)
 		viper.SetConfigType("yaml")
 	}
 

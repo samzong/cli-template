@@ -20,7 +20,7 @@ var configViewCmd = &cobra.Command{
 	Use:   "view",
 	Short: "View current configuration",
 	Long:  "Display the contents of the configuration file",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		configPath := config.GetConfigPath()
 		if configPath == "" {
 			fmt.Println("Configuration file: Not found")
@@ -41,7 +41,7 @@ var configInitCmd = &cobra.Command{
 	Use:   "init",
 	Short: "Initialize configuration file",
 	Long:  "Create a new configuration file with default values",
-	Run: func(cmd *cobra.Command, args []string) {
+	Run: func(_ *cobra.Command, _ []string) {
 		homeDir, err := os.UserHomeDir()
 		if err != nil {
 			fmt.Fprintf(os.Stderr, "Error: Failed to find home directory: %v\n", err)

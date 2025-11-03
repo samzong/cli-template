@@ -18,10 +18,10 @@ var (
 
 	rootCmd = &cobra.Command{
 		Use:     NAME,
-		Short:   fmt.Sprintf("%s is a CLI tool", NAME),
-		Long:    fmt.Sprintf(`%s is a powerful CLI tool that helps you manage resources.`, NAME),
+		Short:   NAME + " is a CLI tool",
+		Long:    NAME + " is a powerful CLI tool that helps you manage resources.",
 		Version: fmt.Sprintf("%s (built at %s)", Version, BuildTime),
-		PersistentPreRunE: func(cmd *cobra.Command, args []string) error {
+		PersistentPreRunE: func(cmd *cobra.Command, _ []string) error {
 			if cmd.Name() == "version" || cmd.Name() == "help" || cmd.Name() == "completion" {
 				return nil
 			}
