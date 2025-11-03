@@ -1,43 +1,20 @@
-# Multi-stage Dockerfile for GoReleaser builds
-# Optimized for security and minimal size
-
 FROM alpine:latest
 
-# Install ca-certificates for HTTPS requests and timezone data
-RUN apk --no-cache add ca-certificates tzdata && \
+RUN apk --no-cache add ca-certificates && \
     update-ca-certificates
 
-# Create non-root user for security
 RUN addgroup -g 1001 appgroup && \
     adduser -D -u 1001 -G appgroup appuser
 
-# Set working directory
 WORKDIR /app
 
-# Copy the binary from GoReleaser context
-# Note: GoReleaser will replace 'mycli' with actual binary name
 COPY mycli /app/mycli
 
-# Make binary executable and change ownership
 RUN chmod +x /app/mycli && \
     chown -R appuser:appgroup /app
 
-# Switch to non-root user
 USER appuser
 
-# Set up environment
 ENV PATH="/app:${PATH}"
 
-# Add health check (adjust command as needed)
-HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD /app/mycli --version > /dev/null || exit 1
-
-# Expose default port (adjust as needed for your CLI)
-# Remove if your CLI doesn't serve HTTP
-EXPOSE 8080
-
-# Set entrypoint to the binary
 ENTRYPOINT ["/app/mycli"]
-
-# Default command (can be overridden)
-CMD ["--help"]

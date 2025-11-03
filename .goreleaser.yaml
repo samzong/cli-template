@@ -101,10 +101,6 @@ brews:
     description: "A CLI application built with Go"
     license: "MIT"
 
-dockerhub:
-  - username: samzong
-    secret_name: DOCKERHUB_TOKEN
-
 changelog:
   use: github
   sort: asc
@@ -164,11 +160,6 @@ release:
 
     **Full Changelog**: https://github.com/samzong/{{ .ProjectName }}/compare/{{ .PreviousTag }}...{{ .Tag }}
 
-
-github_urls:
-  api: https://api.github.com/
-  upload: https://uploads.github.com/
-  download: https://github.com/
 
 metadata:
   mod_timestamp: "{{ .CommitTimestamp }}"

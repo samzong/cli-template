@@ -1,6 +1,6 @@
 .PHONY: build install clean test fmt run lint release help
 .PHONY: build-all docker-build docker-run docker-clean
-.PHONY: check test-coverage test-race test-bench
+.PHONY: check test-coverage
 
 BINARY_NAME=mycli
 VERSION=$(shell git describe --tags --always --dirty 2>/dev/null || echo "dev")
@@ -43,19 +43,13 @@ lint-fix: ## Run linter with auto-fix
 		curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $$(go env GOPATH)/bin latest
 	@golangci-lint run --fix
 
-test: ## Run tests
-	@go test -v ./...
+test: ## Run tests with race detection
+	@go test -v -race ./...
 
 test-coverage: ## Run tests with coverage
 	@mkdir -p $(BUILD_DIR)
 	@go test -v -coverprofile=$(BUILD_DIR)/coverage.out ./...
 	@go tool cover -html=$(BUILD_DIR)/coverage.out -o $(BUILD_DIR)/coverage.html
-
-test-race: ## Run tests with race detection
-	@go test -v -race ./...
-
-test-bench: ## Run benchmark tests
-	@go test -v -bench=. -benchmem ./...
 
 check: fmt lint test ## Run all quality checks
 
